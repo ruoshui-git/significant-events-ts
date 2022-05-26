@@ -59,7 +59,8 @@ const notion = new Client({ auth: process.env.NOTION_KEY });
     };
 
     let pages = await asyncIterableToArray(
-        iteratePaginatedAPI(notion.databases.query, lastMonthIndoorFilter)
+        iteratePaginatedAPI(notion.databases.query, lastMonthFilter)
+        // iteratePaginatedAPI(notion.databases.query, lastMonthIndoorFilter)
     );
 
     console.log(`Total pages: ${pages.length}`);
