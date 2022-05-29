@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import "dotenv/config";
 
 import { Client } from "@notionhq/client";
@@ -17,50 +19,71 @@ const DEBUG = debug("main.ts");
 
 const notion = new Client({ auth: process.env.NOTION_KEY });
 
-(async () => {
-    const databaseId = process.env.NOTION_DB_ID;
+const databaseId = process.env.NOTION_DB_ID;
 
-    if (!databaseId) {
-        throw new Error("No Database ID");
-    }
+if (!databaseId) {
+    throw new Error("No Database ID");
+}
 
-    const lastMonthFilter: QueryDatabaseParameters = {
-        database_id: databaseId,
-        filter: {
-            property: "上月?",
-            checkbox: {
-                equals: true,
-            },
+const lastMonthFilter: QueryDatabaseParameters = {
+    database_id: databaseId,
+    filter: {
+        property: "上月?",
+        checkbox: {
+            equals: true,
         },
-        sorts: [
+    },
+    sorts: [
+        {
+            property: "事件日期",
+            direction: "ascending",
+        },
+    ],
+};
+
+const lastMonthIndoorInclusiveFilter: QueryDatabaseParameters = {
+    ...lastMonthFilter,
+    filter: {
+        and: [
             {
-                property: "事件日期",
-                direction: "ascending",
+                property: "上月?",
+                checkbox: { equals: true },
+            },
+            {
+                property: "负责人",
+                multi_select: {
+                    contains: "毛若水",
+                },
             },
         ],
-    };
+    },
+};
 
-    const lastMonthIndoorFilter: QueryDatabaseParameters = {
-        ...lastMonthFilter,
-        filter: {
-            and: [
-                {
-                    property: "上月?",
-                    checkbox: { equals: true },
+const lastMonthIndoorExclusiveFilter: QueryDatabaseParameters = {
+    ...lastMonthFilter,
+    filter: {
+        and: [
+            {
+                property: "上月?",
+                checkbox: { equals: true },
+            },
+            {
+                property: "负责人",
+                multi_select: {
+                    does_not_contain: "邹家琪",
                 },
-                {
-                    property: "负责人",
-                    multi_select: {
-                        does_not_contain: "邹家琪",
-                    },
-                },
-            ],
-        },
-    };
+            },
+        ],
+    },
+};
 
+(async () => {
     let pages = await asyncIterableToArray(
-        iteratePaginatedAPI(notion.databases.query, lastMonthFilter)
-        // iteratePaginatedAPI(notion.databases.query, lastMonthIndoorFilter)
+        iteratePaginatedAPI(
+            notion.databases.query,
+            lastMonthIndoorInclusiveFilter
+        )
+        // iteratePaginatedAPI(notion.databases.query, lastMonthFilter)
     );
 
     console.log(`Total pages: ${pages.length}`);
@@ -73,7 +96,14 @@ const notion = new Client({ auth: process.env.NOTION_KEY });
         // @ts-ignore
         const title = richTextAsPlainText(page.properties["标题"].title);
         // @ts-ignore
-        const authors = page.properties["记录者"].multi_select.map(
+        const authors: string[] = page.properties["记录者"].multi_select.map(
+            // @ts-ignore
+            (option) => option.name
+        );
+        // @ts-ignore
+        const responsible: string[] = page.properties[
+            "负责人"
+        ].multi_select.map(
             // @ts-ignore
             (option) => option.name
         );
@@ -95,6 +125,25 @@ const notion = new Client({ auth: process.env.NOTION_KEY });
         //     )
         // ).filter((b) => isFullBlock(b));
 
-        await writePage(date, title, pageContent, authors, "docx-indoor");
+        const DEFAULT_DIR = "20220528-docx-result";
+        const OUTDOOR_DIR = "outdoor";
+        const INDOOR_DIR = "indoor";
+        if (responsible.includes("邹家琪")) {
+            await writePage(
+                date,
+                title,
+                pageContent,
+                authors,
+                path.join(DEFAULT_DIR, OUTDOOR_DIR)
+            );
+        } else {
+            await writePage(
+                date,
+                title,
+                pageContent,
+                authors,
+                path.join(DEFAULT_DIR, INDOOR_DIR)
+            );
+        }
     }
 })();
