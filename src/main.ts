@@ -77,11 +77,42 @@ const lastMonthIndoorExclusiveFilter: QueryDatabaseParameters = {
     },
 };
 
+const makeupFilter: QueryDatabaseParameters = {
+    database_id: databaseId,
+    sorts: [
+        {
+            property: "事件日期",
+            direction: "ascending",
+        },
+    ],
+    filter: {
+        and: [
+            {
+                property: "修改?",
+                checkbox: { equals: true },
+            },
+            {
+                property: "提交?",
+                checkbox: { equals: false },
+            },
+        ],
+    },
+};
+
+const finalFilter: QueryDatabaseParameters = {
+    ...lastMonthFilter,
+    filter: {
+        // @ts-ignore
+        or: [lastMonthIndoorInclusiveFilter.filter, makeupFilter.filter],
+    },
+};
+
 (async () => {
     let pages = await asyncIterableToArray(
         iteratePaginatedAPI(
             notion.databases.query,
-            lastMonthIndoorInclusiveFilter
+            // lastMonthIndoorInclusiveFilter
+            finalFilter
         )
         // iteratePaginatedAPI(notion.databases.query, lastMonthFilter)
     );
@@ -107,6 +138,8 @@ const lastMonthIndoorExclusiveFilter: QueryDatabaseParameters = {
             // @ts-ignore
             (option) => option.name
         );
+        // @ts-ignore
+        const is_makeup: boolean = page.properties["修改?"].checkbox;
 
         DEBUG("Page Date: %s", date);
         DEBUG("Page title: %s, by %s", title);
@@ -125,10 +158,19 @@ const lastMonthIndoorExclusiveFilter: QueryDatabaseParameters = {
         //     )
         // ).filter((b) => isFullBlock(b));
 
-        const DEFAULT_DIR = "20220528-docx-result";
+        const DEFAULT_DIR = "20220616-docx-result";
         const OUTDOOR_DIR = "outdoor";
         const INDOOR_DIR = "indoor";
-        if (responsible.includes("邹家琪")) {
+        const MAKEUP_DIR = "make-up";
+        if (is_makeup) {
+            await writePage(
+                date,
+                title,
+                pageContent,
+                authors,
+                path.join(DEFAULT_DIR, MAKEUP_DIR)
+            );
+        } else if (responsible.includes("邹家琪")) {
             await writePage(
                 date,
                 title,
