@@ -1,4 +1,4 @@
-import debug from "debug";
+// import debug from "debug";
 import {
     convertInchesToTwip,
     Document,
@@ -17,14 +17,17 @@ import got from "got";
 import sizeOf from "image-size";
 import path from "path";
 import { BlockWithChildren, DateResponse } from "./notionHelper";
+import * as Peeking from "./peeking";
 import { BlockType, RichText } from "./types";
 import { assertUnreachable } from "./utils";
-import * as Peeking from "./peeking";
+
+import { getColoredLogger } from "./coloredLogger";
 
 import assert from "assert/strict";
 
-const DEBUG = debug("writer.ts");
-const IGNORE = DEBUG.extend("ignore");
+const log = getColoredLogger();
+// const DEBUG = debug("writer.ts");
+// const IGNORE = DEBUG.extend("ignore");
 const STYLES_PROMISE = fs.readFile("./styles.xml", { encoding: "utf-8" });
 const MAX_IMAGE_WIDTH = 650;
 
@@ -37,15 +40,35 @@ async function dirExists(dir: string): Promise<boolean> {
     }
 }
 
-export async function writePage(
-    date: DateResponse,
-    title: string,
-    page: BlockWithChildren[],
-    authors: string[],
-    parentDir?: string
-) {
-    if (parentDir && !(await dirExists(parentDir))) {
-        await fs.mkdir(parentDir, { recursive: true });
+/**
+ * Make dir if doesn't exist
+ * @param dir Name of dir
+ */
+async function mkdirF(dir: string) {
+    if (!(await dirExists(dir))) {
+        await fs.mkdir(dir, { recursive: true });
+    }
+}
+
+export interface WritePageOpts {
+    date: DateResponse;
+    title: string;
+    page: BlockWithChildren[];
+    authors: string[];
+    lastEditedTime: Date;
+    parentDir?: string;
+}
+
+export async function writePage({
+    date,
+    title,
+    page,
+    authors,
+    parentDir,
+    lastEditedTime,
+}: WritePageOpts) {
+    if (parentDir) {
+        await mkdirF(parentDir);
     }
 
     let titleDate = date.start.substring(0, 10).replaceAll("-", "");
@@ -85,11 +108,17 @@ export async function writePage(
         }
     }
 
-    DEBUG("Getting && writing file %s", `${titleDate} ${title} ${authorStr}`);
+    const fullTitle = `${titleDate} ${title}`;
+
+    let filename = `${fullTitle} ${authorStr}.docx`;
+    filename = parentDir ? path.join(parentDir, filename) : filename;
+    let fullDirname = filename.substring(0, filename.lastIndexOf("."));
+
+    log.info("Getting && writing docx", `${fullTitle} ${authorStr}`);
 
     let parags: Paragraph[] = [
         new Paragraph({
-            text: `${titleDate} ${title}`,
+            text: fullTitle,
             heading: HeadingLevel.HEADING_1,
         }),
         // ...(
@@ -97,11 +126,17 @@ export async function writePage(
         //         page.map(async (block) => await blockToParagRecursive(block, 0))
         //     )
         // ).flat(),
-        ...(await blockListToParag(page, 0)),
+        ...(await blockListToParag(page, 0, fullDirname)),
 
         makeNormalParag(""),
-        makeNormalParag(`记录人：${authorStr}`),
-        makeNormalParag(titleDate),
+        makeNormalParag(
+            authorStr.endsWith("软件") ? `${authorStr}发布` : `${authorStr}记录`
+        ),
+        makeNormalParag(
+            `${lastEditedTime.getFullYear()}年${
+                lastEditedTime.getMonth() + 1
+            }月${lastEditedTime.getDate()}日`
+        ),
     ];
 
     const doc = new Document({
@@ -118,8 +153,6 @@ export async function writePage(
     });
 
     const buf = await Packer.toBuffer(doc);
-    let filename = `${titleDate} ${title} ${authorStr}.docx`;
-    filename = parentDir ? path.join(parentDir, filename) : filename;
     try {
         await fs.writeFile(filename, buf);
     } catch (e) {
@@ -179,7 +212,8 @@ function getContinuousBlocksByType<T extends BlockType>(
 
 async function numListToParags(
     list: BlockWithChildren<"numbered_list_item">[],
-    indentLevel: number
+    indentLevel: number,
+    docxFilename: string
 ): Promise<Paragraph[]> {
     const parags: Paragraph[] = [];
     for (const [index, item] of list.entries()) {
@@ -190,7 +224,11 @@ async function numListToParags(
         parags.push(richTextToParag({ rt, indentLevel }));
         if (item.has_children) {
             parags.push(
-                ...(await blockListToParag(item.children, indentLevel + 1))
+                ...(await blockListToParag(
+                    item.children,
+                    indentLevel + 1,
+                    docxFilename
+                ))
             );
         }
     }
@@ -200,7 +238,8 @@ async function numListToParags(
 
 async function bulletListToParags(
     list: BlockWithChildren<"bulleted_list_item">[],
-    indentLevel: number
+    indentLevel: number,
+    docxFilename: string
 ): Promise<Paragraph[]> {
     return (
         await Promise.all(
@@ -215,7 +254,8 @@ async function bulletListToParags(
                     l.push(
                         ...(await blockListToParag(
                             item.children,
-                            indentLevel + 1
+                            indentLevel + 1,
+                            docxFilename
                         ))
                     );
                 }
@@ -227,7 +267,8 @@ async function bulletListToParags(
 
 async function blockListToParag(
     blocks: BlockWithChildren[],
-    indentLevel: number
+    indentLevel: number,
+    docxFilename: string
 ): Promise<Paragraph[]> {
     let parags: Paragraph[] = [];
 
@@ -245,21 +286,31 @@ async function blockListToParag(
                 "numbered_list_item"
             );
 
-            parags.push(...(await numListToParags(list, indentLevel)));
+            parags.push(
+                ...(await numListToParags(list, indentLevel, docxFilename))
+            );
         } else if (block.type === "bulleted_list_item") {
             const list = getContinuousBlocksByType(
                 blocksIter,
                 "bulleted_list_item"
             );
-            parags.push(...(await bulletListToParags(list, indentLevel)));
+            parags.push(
+                ...(await bulletListToParags(list, indentLevel, docxFilename))
+            );
         } else {
             // only do normal ops (including advancing iter) if it's not a list item
-            parags.push(...(await blockToParag(block, indentLevel)));
+            parags.push(
+                ...(await blockToParag(block, indentLevel, docxFilename))
+            );
 
             if (block.has_children) {
                 // recurse
                 parags.push(
-                    ...(await blockListToParag(block.children, indentLevel + 1))
+                    ...(await blockListToParag(
+                        block.children,
+                        indentLevel + 1,
+                        docxFilename
+                    ))
                 );
             }
 
@@ -271,7 +322,11 @@ async function blockListToParag(
     return parags;
 }
 
-async function blockToParag(block: BlockWithChildren, indentLevel: number) {
+async function blockToParag(
+    block: BlockWithChildren,
+    indentLevel: number,
+    docxFilename: string
+) {
     let parags: Paragraph[] = [];
     switch (block.type) {
         case "paragraph":
@@ -286,7 +341,7 @@ async function blockToParag(block: BlockWithChildren, indentLevel: number) {
             throw new Error(`Should not reach type ${block.type}`);
 
         case "equation":
-            IGNORE("Ignoring type %s", block.type);
+            log.warn("Ignoring type %s", block.type);
             break;
 
         case "heading_1":
@@ -347,10 +402,10 @@ async function blockToParag(block: BlockWithChildren, indentLevel: number) {
         case "table_row":
         case "template":
         case "unsupported":
-            IGNORE("Ignoring type %s", block.type);
+            log.warn("Ignoring type", block.type);
             break;
 
-        case "image":
+        case "image": {
             let url: string;
             if (block.image.type == "external") {
                 url = block.image.external.url;
@@ -367,8 +422,8 @@ async function blockToParag(block: BlockWithChildren, indentLevel: number) {
                 width /= scale;
                 height /= scale;
             }
-            DEBUG("Image size: %d by %d", dim.height, dim.width);
-            DEBUG("Displaying at: %d by %d", height, width);
+            log.info(`Image size: ${dim.height} by ${dim.width}`);
+            log.info(`Displaying at: ${height} by ${width}`);
 
             parags.push(
                 new Paragraph({
@@ -384,33 +439,72 @@ async function blockToParag(block: BlockWithChildren, indentLevel: number) {
                 })
             );
 
-            let caption = block.image.caption;
-            if (caption.length > 0) {
-                caption[0].plain_text = `（${caption[0].plain_text}`;
-                caption[caption.length - 1].plain_text = `${
-                    caption[caption.length - 1].plain_text
-                }）`;
-                parags.push(richTextToParag({ rt: caption, indentLevel }));
+            let captionParag = captionToParag(block.image.caption, indentLevel);
+            if (captionParag) {
+                parags.push(captionParag);
             }
-            
             parags.push(makeNormalParag(""));
 
             break;
-        case "video":
-        case "audio":
-        case "file":
-            // file operations
-            IGNORE("File ops to be implemented");
+        }
+        case "video": {
+            await fileOps("video", "视频");
             break;
+        }
+        case "audio": {
+            await fileOps("audio", "音频");
+            break;
+        }
+        case "file": {
+            await fileOps("file", "文件");
+            break;
+        }
 
         // case ""
         default:
-            // // @ts-expect-error Argument of type '"C"' is not assignable to parameter of type 'never'.ts(2345)
             assertUnreachable(block, "Switch has a missing clause!", () =>
                 console.log({ typeError: "on switch" })
             );
     }
     return parags;
+
+    async function fileOps(
+        type: "video" | "audio" | "file",
+        chineseText: string
+    ) {
+        let url: string;
+        // block = block as BlockWithChildren<'video'|'audio'|'file'>;
+        // @ts-ignore
+        if (block[type].type === "external") {
+            // @ts-ignore
+            url = block[type].external.url;
+        } else {
+            // @ts-ignore
+            url = block[type].file.url;
+        }
+        await mkdirF(docxFilename);
+        let parsedBufferName = url.split("/").pop()?.split("?").shift();
+        if (!parsedBufferName) {
+            parsedBufferName = `未命名${chineseText}`;
+        }
+        let bufferName = decodeURIComponent(parsedBufferName).replaceAll(
+            "_",
+            " "
+        );
+        log.info(`Downloading ${type} ${bufferName}...`);
+        const data = await got(url).buffer();
+
+        log.info(`Writing buffer to file...`);
+        await fs.writeFile(path.join(docxFilename, bufferName), data);
+
+        parags.push(makeNormalParag(`【${chineseText}：${bufferName}】`));
+        // @ts-ignore
+        let captionParag = captionToParag(block[type].caption, indentLevel);
+        if (captionParag) {
+            parags.push(captionParag);
+        }
+        parags.push(makeNormalParag(""));
+    }
 }
 
 interface RtParagConfig {
@@ -418,6 +512,22 @@ interface RtParagConfig {
     indentLevel: number;
     heading?: HeadingLevel;
     bullet?: boolean;
+}
+
+/**
+ * Convert a video or audio caption to Parag (add parens around)
+ * @param caption RichText
+ * @param indentLevel number
+ * @returns Docx Parag
+ */
+function captionToParag(caption: RichText[], indentLevel: number) {
+    if (caption.length > 0) {
+        caption[0].plain_text = `（${caption[0].plain_text}`;
+        caption[caption.length - 1].plain_text = `${
+            caption[caption.length - 1].plain_text
+        }）`;
+        return richTextToParag({ rt: caption, indentLevel });
+    }
 }
 
 // async function blockToParagRecursive(

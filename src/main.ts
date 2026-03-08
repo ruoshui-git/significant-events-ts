@@ -2,20 +2,43 @@ import path from "node:path";
 
 import "dotenv/config";
 
-import { Client } from "@notionhq/client";
-
-import { debug } from "debug";
+import { Client, collectPaginatedAPI, isFullPage } from "@notionhq/client";
 
 import {
-    asyncIterableToArray,
-    iteratePaginatedAPI,
+    CheckboxPropertyItemObjectResponse,
+    DatePropertyItemObjectResponse,
+    GetPageResponse,
+    LastEditedTimePropertyItemObjectResponse,
+    MultiSelectPropertyItemObjectResponse,
+    PropertyItemObjectResponse,
+    QueryDatabaseParameters,
+    TitlePropertyItemObjectResponse,
+} from "@notionhq/client/build/src/api-endpoints";
+import {
     getChildBlocksWithChildrenRecursively,
     richTextAsPlainText,
 } from "./notionHelper";
-import { writePage } from "./writer";
-import { QueryDatabaseParameters } from "@notionhq/client/build/src/api-endpoints";
+import { writePage, WritePageOpts } from "./writer";
+// import log from "loglevel";
+import { getColoredLogger } from "./coloredLogger";
+import yargs from "yargs/yargs";
 
-const DEBUG = debug("main.ts");
+const log = getColoredLogger();
+
+const argv = yargs(process.argv.slice(2))
+    .options({
+        verbosity: {
+            type: "number",
+            count: true,
+            alias: "v",
+        },
+        quiet: {
+            type: "boolean",
+            alias: "q",
+            default: false,
+        },
+    })
+    .parseSync();
 
 const notion = new Client({ auth: process.env.NOTION_KEY });
 
@@ -25,130 +48,167 @@ if (!databaseId) {
     throw new Error("No Database ID");
 }
 
-const lastMonthFilter: QueryDatabaseParameters = {
-    database_id: databaseId,
-    filter: {
-        property: "上月?",
-        checkbox: {
-            equals: true,
-        },
-    },
-    sorts: [
-        {
-            property: "事件日期",
-            direction: "ascending",
-        },
-    ],
-};
-
-const lastMonthIndoorInclusiveFilter: QueryDatabaseParameters = {
-    ...lastMonthFilter,
-    filter: {
-        and: [
-            {
-                property: "上月?",
-                checkbox: { equals: true },
-            },
-            {
-                property: "负责人",
-                multi_select: {
-                    contains: "毛若水",
-                },
-            },
-        ],
-    },
-};
-
-const lastMonthIndoorExclusiveFilter: QueryDatabaseParameters = {
-    ...lastMonthFilter,
-    filter: {
-        and: [
-            {
-                property: "上月?",
-                checkbox: { equals: true },
-            },
-            {
-                property: "负责人",
-                multi_select: {
-                    does_not_contain: "邹家琪",
-                },
-            },
-        ],
-    },
-};
-
-const makeupFilter: QueryDatabaseParameters = {
-    database_id: databaseId,
-    sorts: [
-        {
-            property: "事件日期",
-            direction: "ascending",
-        },
-    ],
-    filter: {
-        and: [
-            {
-                property: "修改?",
-                checkbox: { equals: true },
-            },
-            {
-                property: "提交?",
-                checkbox: { equals: false },
-            },
-        ],
-    },
-};
 
 const finalFilter: QueryDatabaseParameters = {
-    ...lastMonthFilter,
+    database_id: databaseId,
+    sorts: [
+        {
+            property: "事件日期",
+            direction: "ascending",
+        },
+    ],
     filter: {
+        // or: [lastMonthIndoorInclusiveFilter.filter, makeupFilter.filter],
+        property: "状态",
         // @ts-ignore
-        or: [lastMonthIndoorInclusiveFilter.filter, makeupFilter.filter],
+        status: {
+            equals: "未提交-下载",
+            // equals: "需要信息",
+        },
     },
 };
 
 (async () => {
-    let pages = await asyncIterableToArray(
-        iteratePaginatedAPI(
-            notion.databases.query,
-            // lastMonthIndoorInclusiveFilter
-            finalFilter
-        )
+    // console.log(argv.verbosity);
+
+    // @ts-ignore
+    log.setLevel(log.getLevel() - argv.verbosity);
+
+    if (argv.quiet) {
+        log.setLevel(log.levels.SILENT);
+    }
+
+    // console.log(log.getLevel());
+
+    // log.trace("trace!");
+    // log.debug("debug!");
+    // log.info("info!");
+    // log.warn("warn!");
+    // log.error("error!");
+
+    // console.log("Hi!");
+
+    let pages = await collectPaginatedAPI(
+        // iteratePaginatedAPI(
+        notion.databases.query,
+        // lastMonthIndoorInclusiveFilter
+        finalFilter
+        // )
         // iteratePaginatedAPI(notion.databases.query, lastMonthFilter)
     );
 
+    // pages = pages.slice(15);
+
     console.log(`Total pages: ${pages.length}`);
+
+    const TODAY = new Date();
+    const year = TODAY.getFullYear();
+    const month = (TODAY.getMonth() + 1).toString().padStart(2, "0");
+    const date = (TODAY.getDate() + 1).toString().padStart(2, "0");
+    const DEFAULT_DIR = `${year}${month}${date}-docx-result`;
+    const OUTDOOR_DIR = "outdoor";
+    const INDOOR_DIR = "indoor";
+    const MAKEUP_DIR = "make-up";
+    const NEWS = "播报申请";
+
+    async function getPageProp(
+        page: GetPageResponse,
+        prop: string
+    ): Promise<PropertyItemObjectResponse | PropertyItemObjectResponse[]> {
+        if (isFullPage(page)) {
+            const res = await notion.pages.properties.retrieve({
+                page_id: page.id,
+                property_id: page.properties[prop].id,
+            });
+            if (res.object === "list") {
+                const list = await collectPaginatedAPI(
+                    // @ts-ignore
+                    notion.pages.properties.retrieve,
+                    {
+                        page_id: page.id,
+                        property_id: page.properties[prop].id,
+                    }
+                );
+                return list;
+            } else {
+                return res;
+            }
+        } else {
+            // debug(`Page ${page.id} is not a full page}`);
+            throw new Error(`Page ${page.id} is not a full page}`);
+        }
+    }
 
     for await (const page of pages) {
         // const title = page.properties["标题"].title;
 
-        // @ts-ignore
-        const date = page.properties["事件日期"].date;
-        // @ts-ignore
-        const title = richTextAsPlainText(page.properties["标题"].title);
-        // @ts-ignore
-        const authors: string[] = page.properties["记录者"].multi_select.map(
-            // @ts-ignore
-            (option) => option.name
+        const date = (
+            (await getPageProp(
+                page,
+                "事件日期"
+            )) as DatePropertyItemObjectResponse
+        ).date!;
+        const titleRes = await getPageProp(page, "标题");
+        const title = richTextAsPlainText(
+            (titleRes as TitlePropertyItemObjectResponse[]).map(
+                (title) => title.title
+            )
         );
-        // @ts-ignore
-        const responsible: string[] = page.properties[
-            "负责人"
-        ].multi_select.map(
-            // @ts-ignore
-            (option) => option.name
-        );
-        // @ts-ignore
-        const is_makeup: boolean = page.properties["修改?"].checkbox;
+        const authors: string[] = (
+            (await getPageProp(
+                page,
+                "记录者"
+            )) as MultiSelectPropertyItemObjectResponse
+        ).multi_select.map((option) => option.name);
+        const category: string[] = (
+            (await getPageProp(
+                page,
+                "负责"
+            )) as MultiSelectPropertyItemObjectResponse
+        ).multi_select.map((option) => option.name);
+        const is_makeup: boolean = (
+            (await getPageProp(
+                page,
+                "修改?"
+            )) as CheckboxPropertyItemObjectResponse
+        ).checkbox;
 
-        DEBUG("Page Date: %s", date);
-        DEBUG("Page title: %s, by %s", title);
+        const is_news: boolean = (
+            (await getPageProp(
+                page,
+                "播报?"
+            )) as CheckboxPropertyItemObjectResponse
+        ).checkbox;
+
+        // const lastEditedTime = new Date(
+        //     (
+        //         (await getPageProp(
+        //             page,
+        //             "最后修改时间"
+        //         )) as LastEditedTimePropertyItemObjectResponse
+        //     ).last_edited_time
+        // );
+
+        const dateParts = (
+            (await getPageProp(
+                page,
+                "完成日期"
+            )) as DatePropertyItemObjectResponse
+        ).date!.start.split('-');
+        const lastEditedDate = new Date(
+            Number.parseInt(dateParts[0]),
+            Number.parseInt(dateParts[1]) - 1,
+            Number.parseInt(dateParts[2])
+        );
+
+        log.debug("Page Date:", date);
+        log.debug("Page title:", title);
         let pageContent = await getChildBlocksWithChildrenRecursively(
             notion,
             page.id
         );
 
-        DEBUG("%s", JSON.stringify(pageContent));
+        log.debug(JSON.stringify(pageContent));
 
         // let content = (
         //     await asyncIterableToArray(
@@ -158,34 +218,35 @@ const finalFilter: QueryDatabaseParameters = {
         //     )
         // ).filter((b) => isFullBlock(b));
 
-        const DEFAULT_DIR = "20220616-docx-result";
-        const OUTDOOR_DIR = "outdoor";
-        const INDOOR_DIR = "indoor";
-        const MAKEUP_DIR = "make-up";
+        const writePageOpts = {
+            date,
+            title,
+            page: pageContent,
+            authors,
+            lastEditedTime: lastEditedDate,
+        };
+
+        // if (is_news) {
+        //     await writePage({
+        //         ...writePageOpts,
+        //         parentDir: path.join(DEFAULT_DIR, NEWS),
+        //     });
+        // } else
         if (is_makeup) {
-            await writePage(
-                date,
-                title,
-                pageContent,
-                authors,
-                path.join(DEFAULT_DIR, MAKEUP_DIR)
-            );
-        } else if (responsible.includes("邹家琪")) {
-            await writePage(
-                date,
-                title,
-                pageContent,
-                authors,
-                path.join(DEFAULT_DIR, OUTDOOR_DIR)
-            );
+            await writePage({
+                ...writePageOpts,
+                parentDir: path.join(DEFAULT_DIR, MAKEUP_DIR),
+            });
+        } else if (category.includes("室外")) {
+            await writePage({
+                ...writePageOpts,
+                parentDir: path.join(DEFAULT_DIR, OUTDOOR_DIR),
+            });
         } else {
-            await writePage(
-                date,
-                title,
-                pageContent,
-                authors,
-                path.join(DEFAULT_DIR, INDOOR_DIR)
-            );
+            await writePage({
+                ...writePageOpts,
+                parentDir: path.join(DEFAULT_DIR, INDOOR_DIR),
+            });
         }
     }
 })();

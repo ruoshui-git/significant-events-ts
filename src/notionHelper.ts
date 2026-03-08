@@ -1,4 +1,4 @@
-import { Client } from "@notionhq/client";
+import { Client, iteratePaginatedAPI } from "@notionhq/client";
 import {
     GetBlockResponse,
     GetPageResponse,
@@ -72,7 +72,7 @@ const DEBUG_ITERATE = DEBUG.extend("iterate");
  * @param firstPageArgs These arguments are used for each page, with an updated `start_cursor`.
  * @category API
  */
-export async function* iteratePaginatedAPI<Args extends PaginatedArgs, Item>(
+export async function* iteratePaginatedAPILocal<Args extends PaginatedArgs, Item>(
     listFn: (args: Args) => Promise<PaginatedList<Item>>,
     firstPageArgs: Args
 ): AsyncIterableIterator<Item> {
