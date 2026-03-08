@@ -10,7 +10,7 @@
         "typescript": "^4.6.3"
     },
     "dependencies": {
-        "@notionhq/client": "^2.1.1",
+        "@notionhq/client": "^5.0.0",
         "@oclif/core": "^1.16.0",
         "chalk": "^4.1.2",
         "docx": "^7.3.0",
@@ -22,9 +22,9 @@
         "yargs": "^17.5.1"
     },
     "scripts": {
-        "start": "npx tsc && env DEBUG=writer* node dist/main.js -v",
+        "start": "npx tsc && env 'DEBUG=writer*' node dist/main.js -v",
         "run": "node dist/main.js",
-        "debug-writer": "env DEBUG=writer* node dist/main.js",
+        "debug-writer": "env 'DEBUG=writer*' node dist/main.js",
         "build": "npx tsc",
         "clean": "rimraf docx-indoor *-docx-result dist/*"
     }

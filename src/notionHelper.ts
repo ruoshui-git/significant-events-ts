@@ -1,8 +1,8 @@
 import { Client, iteratePaginatedAPI } from "@notionhq/client";
-import {
+import type {
     GetBlockResponse,
     GetPageResponse,
-} from "@notionhq/client/build/src/api-endpoints";
+} from "@notionhq/client";
 import debug from "debug";
 import {
     Block,

@@ -11,9 +11,9 @@ import {
     LastEditedTimePropertyItemObjectResponse,
     MultiSelectPropertyItemObjectResponse,
     PropertyItemObjectResponse,
-    QueryDatabaseParameters,
+    QueryDataSourceParameters,
     TitlePropertyItemObjectResponse,
-} from "@notionhq/client/build/src/api-endpoints";
+} from "@notionhq/client";
 import {
     getChildBlocksWithChildrenRecursively,
     richTextAsPlainText,
@@ -43,14 +43,17 @@ const argv = yargs(process.argv.slice(2))
 const notion = new Client({ auth: process.env.NOTION_KEY });
 
 const databaseId = process.env.NOTION_DB_ID;
+const dataSourceId = process.env.NOTION_DATA_SOURCE_ID;
 
 if (!databaseId) {
     throw new Error("No Database ID");
 }
+if (!dataSourceId) {
+    throw new Error("No Data Source ID");
+}
 
-
-const finalFilter: QueryDatabaseParameters = {
-    database_id: databaseId,
+const finalFilter: QueryDataSourceParameters = {
+    data_source_id: dataSourceId,
     sorts: [
         {
             property: "事件日期",
@@ -88,14 +91,16 @@ const finalFilter: QueryDatabaseParameters = {
 
     // console.log("Hi!");
 
-    let pages = await collectPaginatedAPI(
+    let sources = await collectPaginatedAPI(
         // iteratePaginatedAPI(
-        notion.databases.query,
+        notion.dataSources.query,
         // lastMonthIndoorInclusiveFilter
         finalFilter
         // )
         // iteratePaginatedAPI(notion.databases.query, lastMonthFilter)
     );
+
+    let pages = sources.filter((source) => source.object === "page") as GetPageResponse[];
 
     // pages = pages.slice(15);
 

@@ -402,6 +402,7 @@ async function blockToParag(
         case "table_row":
         case "template":
         case "unsupported":
+        case "transcription":
             log.warn("Ignoring type", block.type);
             break;
 

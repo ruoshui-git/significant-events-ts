@@ -2,7 +2,7 @@ import type {
     GetBlockResponse,
     GetDatabaseResponse,
     GetPagePropertyResponse,
-  } from '@notionhq/client/build/src/api-endpoints';
+  } from '@notionhq/client';
   
   /** Property **/
   
