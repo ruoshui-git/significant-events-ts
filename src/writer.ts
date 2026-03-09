@@ -83,12 +83,12 @@ export async function writePage({
         const start = new Date(
             Number.parseInt(startParts[0]),
             Number.parseInt(startParts[1]) - 1,
-            Number.parseInt(startParts[2])
+            Number.parseInt(startParts[2]),
         );
         const end = new Date(
             Number.parseInt(endParts[0]),
             Number.parseInt(endParts[1]) - 1,
-            Number.parseInt(endParts[2])
+            Number.parseInt(endParts[2]),
         );
 
         // const start = new Date(date.start);
@@ -130,12 +130,14 @@ export async function writePage({
 
         makeNormalParag(""),
         makeNormalParag(
-            authorStr.endsWith("软件") ? `${authorStr}发布` : `${authorStr}记录`
+            authorStr.endsWith("软件")
+                ? `${authorStr}发布`
+                : `${authorStr}记录`,
         ),
         makeNormalParag(
             `${lastEditedTime.getFullYear()}年${
                 lastEditedTime.getMonth() + 1
-            }月${lastEditedTime.getDate()}日`
+            }月${lastEditedTime.getDate()}日`,
         ),
     ];
 
@@ -176,7 +178,7 @@ function makeNormalParag(s: string): Paragraph {
 
 function isBlockOfTypeT<T extends BlockType>(
     block: BlockWithChildren,
-    t: T
+    t: T,
 ): block is BlockWithChildren<T> {
     return block.type === t;
 }
@@ -191,7 +193,7 @@ function isBlockOfTypeT<T extends BlockType>(
  */
 function getContinuousBlocksByType<T extends BlockType>(
     iter: Peeking.PeekingIterator<BlockWithChildren>,
-    type: T
+    type: T,
 ): BlockWithChildren<T>[] {
     const blocks: BlockWithChildren<T>[] = [];
 
@@ -206,14 +208,16 @@ function getContinuousBlocksByType<T extends BlockType>(
         curr = iter.peek();
     }
 
-    assert.ok(blocks.length > 0);
+    if (blocks.length === 0) {
+        throw new Error("No blocks found");
+    }
     return blocks;
 }
 
 async function numListToParags(
     list: BlockWithChildren<"numbered_list_item">[],
     indentLevel: number,
-    docxFilename: string
+    docxFilename: string,
 ): Promise<Paragraph[]> {
     const parags: Paragraph[] = [];
     for (const [index, item] of list.entries()) {
@@ -227,8 +231,8 @@ async function numListToParags(
                 ...(await blockListToParag(
                     item.children,
                     indentLevel + 1,
-                    docxFilename
-                ))
+                    docxFilename,
+                )),
             );
         }
     }
@@ -239,7 +243,7 @@ async function numListToParags(
 async function bulletListToParags(
     list: BlockWithChildren<"bulleted_list_item">[],
     indentLevel: number,
-    docxFilename: string
+    docxFilename: string,
 ): Promise<Paragraph[]> {
     return (
         await Promise.all(
@@ -255,12 +259,12 @@ async function bulletListToParags(
                         ...(await blockListToParag(
                             item.children,
                             indentLevel + 1,
-                            docxFilename
-                        ))
+                            docxFilename,
+                        )),
                     );
                 }
                 return l;
-            })
+            }),
         )
     ).flat();
 }
@@ -268,7 +272,7 @@ async function bulletListToParags(
 async function blockListToParag(
     blocks: BlockWithChildren[],
     indentLevel: number,
-    docxFilename: string
+    docxFilename: string,
 ): Promise<Paragraph[]> {
     let parags: Paragraph[] = [];
 
@@ -283,24 +287,24 @@ async function blockListToParag(
         if (block.type === "numbered_list_item") {
             const list = getContinuousBlocksByType(
                 blocksIter,
-                "numbered_list_item"
+                "numbered_list_item",
             );
 
             parags.push(
-                ...(await numListToParags(list, indentLevel, docxFilename))
+                ...(await numListToParags(list, indentLevel, docxFilename)),
             );
         } else if (block.type === "bulleted_list_item") {
             const list = getContinuousBlocksByType(
                 blocksIter,
-                "bulleted_list_item"
+                "bulleted_list_item",
             );
             parags.push(
-                ...(await bulletListToParags(list, indentLevel, docxFilename))
+                ...(await bulletListToParags(list, indentLevel, docxFilename)),
             );
         } else {
             // only do normal ops (including advancing iter) if it's not a list item
             parags.push(
-                ...(await blockToParag(block, indentLevel, docxFilename))
+                ...(await blockToParag(block, indentLevel, docxFilename)),
             );
 
             if (block.has_children) {
@@ -309,8 +313,8 @@ async function blockListToParag(
                     ...(await blockListToParag(
                         block.children,
                         indentLevel + 1,
-                        docxFilename
-                    ))
+                        docxFilename,
+                    )),
                 );
             }
 
@@ -325,13 +329,13 @@ async function blockListToParag(
 async function blockToParag(
     block: BlockWithChildren,
     indentLevel: number,
-    docxFilename: string
+    docxFilename: string,
 ) {
     let parags: Paragraph[] = [];
     switch (block.type) {
         case "paragraph":
             parags.push(
-                richTextToParag({ rt: block.paragraph.rich_text, indentLevel })
+                richTextToParag({ rt: block.paragraph.rich_text, indentLevel }),
             );
             break;
 
@@ -350,7 +354,7 @@ async function blockToParag(
                     rt: block.heading_1.rich_text,
                     indentLevel,
                     heading: HeadingLevel.HEADING_1,
-                })
+                }),
             );
             break;
         case "heading_2":
@@ -359,7 +363,7 @@ async function blockToParag(
                     rt: block.heading_2.rich_text,
                     indentLevel,
                     heading: HeadingLevel.HEADING_2,
-                })
+                }),
             );
             break;
         case "heading_3":
@@ -368,7 +372,7 @@ async function blockToParag(
                     rt: block.heading_3.rich_text,
                     indentLevel,
                     heading: HeadingLevel.HEADING_3,
-                })
+                }),
             );
             break;
 
@@ -377,7 +381,7 @@ async function blockToParag(
                 richTextToParag({
                     rt: block.quote.rich_text,
                     indentLevel: indentLevel + 0.5,
-                })
+                }),
             );
             break;
 
@@ -426,18 +430,39 @@ async function blockToParag(
             log.info(`Image size: ${dim.height} by ${dim.width}`);
             log.info(`Displaying at: ${height} by ${width}`);
 
+            // Normalize image type for docx compatibility
+            let imageType: "jpg" | "png" | "gif" | "bmp" = "png";
+            if (dim.type === "jpeg") {
+                imageType = "jpg";
+            } else if (
+                dim.type === "jpg" ||
+                dim.type === "png" ||
+                dim.type === "gif" ||
+                dim.type === "bmp"
+            ) {
+                imageType = dim.type;
+            } else if (dim.type === "svg") {
+                // SVG requires fallback, default to png for now
+                throw new Error("SVG images are not supported");
+                // imageType = "png";
+
+            } else {
+                throw new Error(`Unsupported image type: ${dim.type}`);
+            }
+
             parags.push(
                 new Paragraph({
                     children: [
                         new ImageRun({
                             data,
+                            type: imageType,
                             transformation: {
                                 height,
                                 width,
                             },
                         }),
                     ],
-                })
+                }),
             );
 
             let captionParag = captionToParag(block.image.caption, indentLevel);
@@ -464,14 +489,14 @@ async function blockToParag(
         // case ""
         default:
             assertUnreachable(block, "Switch has a missing clause!", () =>
-                console.log({ typeError: "on switch" })
+                console.log({ typeError: "on switch" }),
             );
     }
     return parags;
 
     async function fileOps(
         type: "video" | "audio" | "file",
-        chineseText: string
+        chineseText: string,
     ) {
         let url: string;
         // block = block as BlockWithChildren<'video'|'audio'|'file'>;
@@ -490,7 +515,7 @@ async function blockToParag(
         }
         let bufferName = decodeURIComponent(parsedBufferName).replaceAll(
             "_",
-            " "
+            " ",
         );
         log.info(`Downloading ${type} ${bufferName}...`);
         const data = await got(url).buffer();
@@ -511,7 +536,14 @@ async function blockToParag(
 interface RtParagConfig {
     rt: RichText[];
     indentLevel: number;
-    heading?: HeadingLevel;
+    heading?:
+        | "Heading1"
+        | "Heading2"
+        | "Heading3"
+        | "Heading4"
+        | "Heading5"
+        | "Heading6"
+        | "Title";
     bullet?: boolean;
 }
 
