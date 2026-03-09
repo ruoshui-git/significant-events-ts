@@ -11,6 +11,9 @@ import {
     SectionType,
     TextRun,
     UnderlineType,
+    AlignmentType,
+    LevelFormat,
+    convertMillimetersToTwip,
 } from "docx";
 import fs from "fs/promises";
 import got from "got";
@@ -144,10 +147,226 @@ export async function writePage({
     const doc = new Document({
         title,
         externalStyles: await STYLES_PROMISE,
+        numbering: {
+            config: [
+                {
+                    reference: "bullets",
+                    levels: [
+                        {
+                            level: 0,
+                            format: LevelFormat.BULLET,
+                            text: "⦁",
+                            alignment: AlignmentType.LEFT,
+                            style: {
+                                paragraph: {
+                                    indent: {
+                                        left: convertInchesToTwip(0.25),
+                                        hanging: convertInchesToTwip(0.25),
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            level: 1,
+                            format: LevelFormat.BULLET,
+                            text: "⦁",
+                            alignment: AlignmentType.LEFT,
+                            style: {
+                                paragraph: {
+                                    indent: {
+                                        left: convertInchesToTwip(0.5),
+                                        hanging: convertInchesToTwip(0.5),
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            level: 2,
+                            format: LevelFormat.BULLET,
+                            text: "⦁",
+                            alignment: AlignmentType.LEFT,
+                            style: {
+                                paragraph: {
+                                    indent: {
+                                        left: convertInchesToTwip(0.75),
+                                        hanging: convertInchesToTwip(0.75),
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            level: 3,
+                            format: LevelFormat.BULLET,
+                            text: "⦁",
+                            alignment: AlignmentType.LEFT,
+                            style: {
+                                paragraph: {
+                                    indent: {
+                                        left: convertInchesToTwip(1.0),
+                                        hanging: convertInchesToTwip(1.0),
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            level: 4,
+                            format: LevelFormat.BULLET,
+                            text: "⦁",
+                            alignment: AlignmentType.LEFT,
+                            style: {
+                                paragraph: {
+                                    indent: {
+                                        left: convertInchesToTwip(1.25),
+                                        hanging: convertInchesToTwip(1.25),
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            level: 5,
+                            format: LevelFormat.BULLET,
+                            text: "⦁",
+                            alignment: AlignmentType.LEFT,
+                            style: {
+                                paragraph: {
+                                    indent: {
+                                        left: convertInchesToTwip(1.5),
+                                        hanging: convertInchesToTwip(1.5),
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            level: 6,
+                            format: LevelFormat.BULLET,
+                            text: "⦁",
+                            alignment: AlignmentType.LEFT,
+                            style: {
+                                paragraph: {
+                                    indent: {
+                                        left: convertInchesToTwip(1.75),
+                                        hanging: convertInchesToTwip(1.75),
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            level: 7,
+                            format: LevelFormat.BULLET,
+                            text: "⦁",
+                            alignment: AlignmentType.LEFT,
+                            style: {
+                                paragraph: {
+                                    indent: {
+                                        left: convertInchesToTwip(2.0),
+                                        hanging: convertInchesToTwip(2.0),
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            level: 8,
+                            format: LevelFormat.BULLET,
+                            text: "⦁",
+                            alignment: AlignmentType.LEFT,
+                            style: {
+                                paragraph: {
+                                    indent: {
+                                        left: convertInchesToTwip(2.25),
+                                        hanging: convertInchesToTwip(2.25),
+                                    },
+                                },
+                            },
+                        },
+                    ],
+                },
+                {
+                    reference: "bullets-backup",
+                    levels: [
+                        {
+                            level: 0,
+                            format: LevelFormat.BULLET,
+                            text: "\u1F60",
+                            alignment: AlignmentType.LEFT,
+                            style: {
+                                paragraph: {
+                                    indent: {
+                                        left: convertInchesToTwip(0.5),
+                                        hanging: convertInchesToTwip(0.25),
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            level: 1,
+                            format: LevelFormat.BULLET,
+                            text: "\u00A5",
+                            alignment: AlignmentType.LEFT,
+                            style: {
+                                paragraph: {
+                                    indent: {
+                                        left: convertInchesToTwip(1),
+                                        hanging: convertInchesToTwip(0.25),
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            level: 2,
+                            format: LevelFormat.BULLET,
+                            text: "\u273F",
+                            alignment: AlignmentType.LEFT,
+                            style: {
+                                paragraph: {
+                                    indent: {
+                                        left: 2160,
+                                        hanging: convertInchesToTwip(0.25),
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            level: 3,
+                            format: LevelFormat.BULLET,
+                            text: "\u267A",
+                            alignment: AlignmentType.LEFT,
+                            style: {
+                                paragraph: {
+                                    indent: {
+                                        left: 2880,
+                                        hanging: convertInchesToTwip(0.25),
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            level: 4,
+                            format: LevelFormat.BULLET,
+                            text: "\u2603",
+                            alignment: AlignmentType.LEFT,
+                            style: {
+                                paragraph: {
+                                    indent: {
+                                        left: 3600,
+                                        hanging: convertInchesToTwip(0.25),
+                                    },
+                                },
+                            },
+                        },
+                    ],
+                },
+            ],
+        },
         sections: [
             {
                 properties: {
                     type: SectionType.CONTINUOUS,
+                    page: {
+                        size: {
+                            width: convertMillimetersToTwip(216), // Letter width
+                            height: convertMillimetersToTwip(279), // Letter height
+                        },
+                    },
                 },
                 children: parags,
             },
@@ -252,6 +471,7 @@ async function bulletListToParags(
                     richTextToParag({
                         rt: item.bulleted_list_item.rich_text,
                         indentLevel: indentLevel,
+                        numbering: { reference: "bullets", level: indentLevel },
                     }),
                 ];
                 if (item.has_children) {
@@ -445,7 +665,6 @@ async function blockToParag(
                 // SVG requires fallback, default to png for now
                 throw new Error("SVG images are not supported");
                 // imageType = "png";
-
             } else {
                 throw new Error(`Unsupported image type: ${dim.type}`);
             }
@@ -544,7 +763,7 @@ interface RtParagConfig {
         | "Heading5"
         | "Heading6"
         | "Title";
-    bullet?: boolean;
+    numbering?: { reference: string; level: number };
 }
 
 /**
@@ -590,21 +809,19 @@ function richTextToParag({
     rt,
     indentLevel,
     heading,
-    bullet,
+    numbering,
 }: RtParagConfig): Paragraph {
     return new Paragraph({
         // text: richTextAsPlainText(rt),
         heading,
-        bullet: bullet
-            ? {
-                  level: indentLevel,
-              }
-            : undefined,
-        indent: indentLevel
-            ? {
-                  left: convertInchesToTwip(indentLevel * 0.3),
-              }
-            : undefined,
+        numbering,
+        indent: numbering
+            ? undefined
+            : indentLevel
+              ? {
+                    left: convertInchesToTwip(indentLevel * 0.3),
+                }
+              : undefined,
         children: richTextToTextRun(rt),
     });
 }

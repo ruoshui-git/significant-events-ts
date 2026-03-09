@@ -997,9 +997,7 @@
         <w:uiPriority w:val="34"/>
         <w:qFormat/>
         <w:rsid w:val="0020225B"/>
-        <w:pPr>
-            <w:ind w:firstLine="420"/>
-        </w:pPr>
+        <w:pPr />
     </w:style>
     <w:style w:type="paragraph" w:styleId="Quote">
         <w:name w:val="Quote"/>
